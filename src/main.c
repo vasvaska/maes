@@ -40,7 +40,7 @@ void init_UART(uint32_t baud) {
 
 	UCSR0A |= (1 << U2X0);					//Enable 2x speed
 	UCSR0B |= (1 << TXEN0);					//Enable Transmit
-	//UCSR0B |= (1 << RXCIE0); 				//Enable UART receive interrupts
+	UCSR0B |= (1 << RXCIE0); 				//Enable UART receive interrupts
 }
 
 void init_ADC() {
@@ -53,13 +53,15 @@ void init_ADC() {
 }
 
 //Interrupt routines
-/* ISR (USART_RX_vect) { 			//UART Read interrupt for Debug purposes
+ISR (USART_RX_vect) { 			//UART Read interrupt for Debug purposes
 
-	char buff = UDR0;				//Read UART input
+	char buff = UDR0;
+	PORTB ^= (1 << 5);				//Read UART input
 	if ((buff == 'a') || (buff == 'A')) {
-		ADCSRA |= (1 << ADSC);		//Start a single conversion
+		//ADCSRA |= (1 << ADSC);		//Start a single conversion
+		PORTB ^= (1 << 5);
 	}
-} */
+}
 
 ISR (ADC_vect) {		//ADC complete interrupt
 
@@ -100,6 +102,7 @@ ISR(TIMER1_OVF_vect) {	//Timer1 overflow interrupt
 	//TCNT0=reload;
 	ADCSRA |= (1 << ADSC);
 	TCNT1 = (0xFFFF-20000);//625
+	PORTB ^= (1 << 5);
 }
 
 void init_TIMER() {
@@ -116,10 +119,14 @@ void init_GPIO() {
 
 int main(void) {
 	init_GPIO();
+	DDRB |= (1 << 5);
 	init_TIMER();
 	init_UART(BAUDRATE);			//Initiate UART with specified BAUDRATE
 	init_ADC();						//Initiate ADC and enable interrupts
 	sei();							//Enable global interrupts
-	while (1)
+	while (1){
+//
+//_delay_ms(100);
+}
 		;
 }
