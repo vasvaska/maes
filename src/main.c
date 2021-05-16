@@ -86,7 +86,7 @@ ISR (ADC_vect) {		//ADC complete interrupt
 		int adc_val = ADCW;//read adc
 		float scale=adc_val/1024.*5;//calculate %boost based on ADC value
 		//read prog mem and write it to package[0 and 1]
-		int value =pgm_read_word(&(data[simulation_counter));
+		int value =pgm_read_word(&(data[simulation_counter]));
 		simulation_counter+=(sampleRate/100);//increase counter based on the counterrrate
 		if(simulation_counter>=15000)simulation_counter-=15000;
 		value*=scale+1;
