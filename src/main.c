@@ -33,9 +33,13 @@
 volatile uint8_t sampleRate =100;//in Hz
 volatile uint8_t package[17] = { 0xA5, 0x5A, 0x02, 0 };
 volatile uint8_t package_counter = 1;
+
 volatile uint16_t simulation_counter = 0;
-volatile uint8_t simulation_channel =5;
+volatile uint8_t simulation_channel =0;
 volatile uint8_t channel = 0;
+
+volatile uint8_t buffer_index=0;
+volatile uint8_t buffer[10];
 
 uint16_t read_int(uint16_t adress){
 	return pgm_read_word(adress);
@@ -60,25 +64,53 @@ void init_ADC() {
 
 }
 
+void checkCommand(){
+
+	if((buffer[0]=='s' && buffer[1]=='c')||(buffer[0]=='S' && buffer[1]=='C')){
+		simulation_channel=buffer[2];
+		for(;buffer_index>=0;buffer_index--)
+		{
+			buffer[buffer_index]=0;
+		}
+	}
+	if((buffer[0]=='s' && buffer[1]=='r')||(buffer[0]=='S' && buffer[1]=='R')){
+		sampleRate = 100*buffer[2] + 10*buffer[3]+buffer[4];
+
+		for(;buffer_index>=0;buffer_index--)
+		{
+			buffer[buffer_index]=0;
+		}
+	}
+
+
+}
 //Interrupt routines
 ISR (USART_RX_vect) { 			//UART Read interrupt for Debug purposes
 
-	char buff = UDR0;
-	PORTB ^= (1 << 5);				//Read UART input
-	if ((buff == 'a') || (buff == 'A')) {//Start a single conversion
-		ADCSRA |= (1 << ADSC);
+	//char buff = UDR0;
+	static char waste =0;
+	waste = UDR0;
+
+	 simulation_channel=5;
+
+	if(waste<='z' && waste>='0'){
+		buffer[buffer_index]=waste;
+		buffer_index++;
 	}
-	if ((buff == 'd') || (buff == 'D')) {//start timer
-		TCCR1B ^= (1 << 1);
+	if(waste=='\n'||waste=='x'){
+		PORTB^=(1<<5);
+
+		//checkCommand();
+	//	simulation_channel=2;
 	}
+
+
 }
 
 ISR (ADC_vect) {		//ADC complete interrupt
 
 	if (channel == 6) {
 		channel = 0;
-		//write last pack from
-
 		package[16] = PIND;		//write PIND to byte 17
 		UCSR0B |= (1 << UDRIE0);		//Enable USART_UDRE interrupts
 	} else if(channel==simulation_channel){
@@ -88,19 +120,21 @@ ISR (ADC_vect) {		//ADC complete interrupt
 		//read prog mem and write it to package[0 and 1]
 		int value =pgm_read_word(&(data[simulation_counter]));
 		simulation_counter+=(sampleRate/100);//increase counter based on the counterrrate
-		if(simulation_counter>=15000)simulation_counter-=15000;
+		if(simulation_counter>=1000)simulation_counter-=1000;//TODO 150000
 		value*=scale+1;
-		package[5 + (2 * channel)]=(char)value&0xFF;
-		package[4 + (2 * channel)]=(char)(value>>8);
+		package[5 + (2 * simulation_channel)]=(char)value&0xFF;
+		package[4 + (2 * simulation_channel)]=(char)(value>>8);
+		//package[5 + (2 * simulation_channel)]=0xFF;
+		//package[4 + (2 * simulation_channel)]=0xFF;
 		ADMUX &= ~(0x07);
-		ADMUX |= ++channel;				//Select next channel
+		ADMUX |= ++channel;					//Select next channel
 		ADCSRA |= (1 << ADSC); 			//Initiate next channel ADC-on
 
 	}else{
 		package[5 + (2 * channel)] = ADCL;
 		package[4 + (2 * channel)] = ADCH;
 		ADMUX &= ~(0x07);
-		ADMUX |= ++channel;				//Select next channel
+		ADMUX |= ++channel;					//Select next channel
 		ADCSRA |= (1 << ADSC); 			//Initiate next channel ADC-on
 	}
 
@@ -121,19 +155,21 @@ ISR (USART_UDRE_vect) { //UART write interrupt
 ISR(INT0_vect) { 		//PD2 interrupt
 
 	//Enable : TCCR0B|=0x04;//(1-5); //depending on prescaler 4->1/256; ->timer1 -> ~1s
-	TCCR1B ^= (1 << 1); //(1<<2)		//prescaler
+	TCCR1B ^= (1 << 2); //(1<<2)		//prescaler
+
 	//TCCR0B^=(1<<2);
 }
 
 ISR(TIMER1_OVF_vect) {	//Timer1 overflow interrupt
 	//TCNT0=reload;
 	ADCSRA |= (1 << ADSC);
-	TCNT1 = (0xFFFF-20000);//625
+	TCNT1 = (0xFFFF-(62505/sampleRate));//625
 	PORTB ^= (1 << 5);
 }
 
 void init_TIMER() {
-	TCNT1 = (0xFFFF-20000);//reload value; 625
+
+	TCNT1 = (0xFFFF-(62505/sampleRate));//reload value; 625
 	//TIMSK0|=(1<<0); //Enable timer0 overflow interrupt
 	TIMSK1 |= (1 << 0);
 }
